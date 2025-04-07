@@ -11,6 +11,11 @@ advanced_analysis/
 export.json*
 *.backup_*
 
+# Backup files
+export.json.backup_*
+balance_data_backup_*/
+*.bak
+
 # Temporary and fix scripts
 temp_*.py
 fix_*.py
@@ -62,4 +67,13 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
-*~ 
+*~
+
+# Flask
+instance/
+.webassets-cache
+
+# Environment variables
+.env
+
+# Removed game_guide.md from being ignored 

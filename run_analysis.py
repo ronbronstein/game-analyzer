@@ -112,7 +112,7 @@ def run_extraction(json_file, output_dir=DEFAULT_DIRS['extraction'], max_workers
                 logger.error(traceback.format_exc())
             return False
 
-def run_economy_analysis(data_dir=DEFAULT_DIRS['extraction'], output_dir=DEFAULT_DIRS['economy']):
+def run_economy_analysis(data_dir=DEFAULT_DIRS['extraction'], output_dir=DEFAULT_DIRS['economy'], show_all_players=False, developer_view=False):
     """Run economy analysis phase"""
     with Timer("Economy analysis phase"):
         try:
@@ -121,7 +121,7 @@ def run_economy_analysis(data_dir=DEFAULT_DIRS['extraction'], output_dir=DEFAULT
             
             # Run analysis
             logger.info(f"Analyzing economy data from {data_dir}...")
-            success = run_economy_analysis(data_dir, output_dir)
+            success = run_economy_analysis(data_dir, output_dir, show_all_players, developer_view)
             
             if not success:
                 logger.error("Economy analysis failed")
@@ -247,6 +247,8 @@ def main():
     parser.add_argument("--advanced-only", action="store_true", help="Run only advanced economy analysis")
     parser.add_argument("--debug", action="store_true", help="Show debug information")
     parser.add_argument("--workers", type=int, help="Number of worker processes for extraction")
+    parser.add_argument("--show-all-players", action="store_true", help="Show all players in the analysis, not just top players")
+    parser.add_argument("--developer-view", action="store_true", help="Focus on game developer metrics like economy balance and player retention")
     
     args = parser.parse_args()
     
@@ -292,6 +294,8 @@ def main():
             
             # If skipping extraction but no data exists, check if this is for testing
             try:
+                # Update import path to use archive/scripts folder
+                sys.path.append(os.path.join(os.path.dirname(__file__), 'archive', 'scripts'))
                 import generate_data
                 logger.warning("Using generated sample data for testing purposes only.")
                 logger.warning("For real analysis, run without --skip-extraction and provide a Discord export.json")
@@ -307,7 +311,7 @@ def main():
         logger.info(" Economy Analysis Phase ".center(80, "*"))
         logger.info("=" * 80 + "\n")
         
-        if run_economy_analysis():
+        if run_economy_analysis(show_all_players=args.show_all_players, developer_view=args.developer_view):
             completed_phases.append("economy_analysis")
     
     # Gambling analysis phase
