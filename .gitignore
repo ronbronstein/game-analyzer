@@ -15,6 +15,9 @@ export.json*
 temp_*.py
 fix_*.py
 
+# Archive
+archive/
+
 # Python artifacts
 __pycache__/
 *.py[cod]
