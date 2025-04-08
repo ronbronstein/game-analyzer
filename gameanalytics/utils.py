@@ -10,26 +10,57 @@ import seaborn as sns
 import logging
 from datetime import datetime
 import json
+import sys
+import time
+import numpy as np
+import matplotlib.dates as mdates
+import subprocess
 
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('gameanalytics.log')
+        logging.StreamHandler(sys.stdout)
     ]
 )
 
 logger = logging.getLogger('gameanalytics')
 
 # Plot styling
-def set_plot_style():
-    """Set consistent plot style for all visualizations"""
+def set_plot_style(theme='dark'):
+    """Set matplotlib style for consistent visuals"""
     plt.style.use('ggplot')
-    sns.set_style("whitegrid")
-    sns.set_palette("deep")
-    plt.rcParams.update({'font.size': 12})
+    
+    if theme == 'dark':
+        plt.rcParams.update({
+            'figure.facecolor': '#1e1e1e',
+            'axes.facecolor': '#2d2d2d',
+            'axes.edgecolor': '#757575',
+            'axes.labelcolor': 'white',
+            'axes.titlecolor': 'white',
+            'xtick.color': 'white',
+            'ytick.color': 'white',
+            'text.color': 'white',
+            'grid.color': '#3a3a3a',
+        })
+    
+    # Set higher DPI and figure size for better quality
+    plt.rcParams['figure.dpi'] = 100
+    plt.rcParams['figure.figsize'] = (12, 8)
+    
+    # Improve font rendering
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', 'sans-serif']
+    
+    # Configure date formatting
+    plt.rcParams['date.autoformatter.day'] = '%Y-%m-%d'
+    plt.rcParams['date.autoformatter.hour'] = '%m-%d %H:%M'
+    
+    # Increase font sizes for better readability
+    plt.rcParams['font.size'] = 12
+    plt.rcParams['axes.titlesize'] = 16
+    plt.rcParams['axes.labelsize'] = 14
 
 # Data loading
 def load_csv_data(file_path, parse_dates=True):
@@ -73,8 +104,8 @@ def load_json_data(file_path):
 def ensure_directory(directory):
     """Create directory if it doesn't exist"""
     if not os.path.exists(directory):
-        logger.info(f"Creating directory: {directory}")
         os.makedirs(directory, exist_ok=True)
+        logger.info(f"Created directory: {directory}")
     return directory
 
 # Data validation
@@ -137,16 +168,62 @@ def print_progress(current, total, message="Processing", length=50):
 
 # Time measurement
 class Timer:
-    """Simple timer class to measure execution time"""
-    def __init__(self, name="Operation"):
-        self.name = name
-        self.start_time = None
-    
+    """Simple timer for performance tracking"""
+    def __init__(self, description):
+        self.description = description
+        
     def __enter__(self):
-        self.start_time = datetime.now()
+        self.start = time.time()
         return self
+        
+    def __exit__(self, *args):
+        elapsed = time.time() - self.start
+        logger.info(f"{self.description} completed in {elapsed:.2f}s")
+
+def format_date_axis(ax, date_column, rotation=45):
+    """Format the date axis properly for better readability"""
+    if not len(date_column):
+        return
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        end_time = datetime.now()
-        duration = (end_time - self.start_time).total_seconds()
-        logger.info(f"{self.name} completed in {duration:.2f} seconds") 
+    # Determine the date range and choose appropriate formatter
+    date_range = (pd.to_datetime(date_column.max()) - pd.to_datetime(date_column.min())).days
+    
+    if date_range > 365:  # More than a year
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+    elif date_range > 180:  # 6+ months
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+        ax.xaxis.set_major_locator(mdates.MonthLocator())
+    elif date_range > 30:  # 1+ month
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+    elif date_range > 7:  # 1+ week
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
+    else:  # Less than a week
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d %H:%M'))
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
+    
+    # Rotate date labels for better readability
+    plt.setp(ax.get_xticklabels(), rotation=rotation, ha='right')
+    
+    # Add some padding at the bottom for rotated labels
+    plt.subplots_adjust(bottom=0.2)
+
+def is_docker_running():
+    """Check if Docker daemon is running
+    
+    Returns:
+        bool: True if Docker is running, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            ['docker', 'info'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=3
+        )
+        return result.returncode == 0
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return False 

@@ -381,11 +381,11 @@ class AdvancedEconomyAnalyzer:
                     nx.draw_networkx_labels(H, pos, font_size=10)
                     
                     plt.title(f'Top {max_nodes_for_viz} Players Transaction Network', fontsize=16)
-                    plt.axis('off')
-                    plt.tight_layout()
+        plt.axis('off')
+        plt.tight_layout()
                     plt.savefig(os.path.join(self.output_dir, 'top_players_network.png'), dpi=300)
-                    plt.close()
-                
+        plt.close()
+        
                 # Detect communities if we have enough nodes
                 if G.number_of_nodes() >= 10:
                     try:
@@ -515,12 +515,12 @@ class AdvancedEconomyAnalyzer:
                 """
             
             # Create complete HTML report
-            html_content = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
                 <title>Advanced Economy Analysis</title>
-                <style>
+            <style>
                     body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; color: #333; }}
                     .container {{ max-width: 1200px; margin: 0 auto; padding: 20px; }}
                     h1, h2, h3, h4 {{ color: #2c3e50; }}
@@ -541,11 +541,11 @@ class AdvancedEconomyAnalyzer:
                     th {{ background-color: #f0f0f0; }}
                     
                     footer {{ margin-top: 50px; text-align: center; color: #7f8c8d; font-size: 0.9em; }}
-                </style>
-            </head>
-            <body>
+            </style>
+        </head>
+        <body>
                 <div class="container">
-                    <h1>Advanced Economy Analysis</h1>
+            <h1>Advanced Economy Analysis</h1>
                     
                     <h2>Economic Forecasting & Time Series Analysis</h2>
                     <div class="insights-container">
@@ -557,20 +557,20 @@ class AdvancedEconomyAnalyzer:
                     <h2>Player Interaction Network</h2>
                     <div class="insights-container">
                         {network_insights}
-                    </div>
+            </div>
                     
-                    <footer>
-                        <p>Analysis generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-                    </footer>
+            <footer>
+                <p>Analysis generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+            </footer>
                 </div>
-            </body>
-            </html>
-            """
-            
-            # Write HTML file
+        </body>
+        </html>
+        """
+        
+        # Write HTML file
             report_path = os.path.join(self.output_dir, 'advanced_economy_report.html')
-            with open(report_path, 'w', encoding='utf-8') as f:
-                f.write(html_content)
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
             
             logger.info(f"Advanced analysis report generated: {report_path}")
             return True

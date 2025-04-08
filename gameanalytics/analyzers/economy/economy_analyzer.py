@@ -17,7 +17,7 @@ import traceback
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-from gameanalytics.utils import load_csv_data, ensure_directory, set_plot_style, logger, Timer
+from gameanalytics.utils import load_csv_data, ensure_directory, set_plot_style, logger, Timer, format_date_axis
 from gameanalytics.config import ANALYSIS_CONFIG, VISUALIZATION_CONFIG
 
 class EconomyAnalyzer:
@@ -227,7 +227,7 @@ class EconomyAnalyzer:
                     'cash_with_sign': 'sum',
                     'user': 'nunique'
                 }).rename(columns={'timestamp': 'transaction_count', 'user': 'unique_users'})
-            
+                
             # Ensure we have a cash_with_sign column with valid data
             cash_column = None
             for col in ['cash_with_sign', 'net_cash', 'net_cash_flow', 'cash']:
@@ -396,65 +396,71 @@ class EconomyAnalyzer:
     
     def analyze_economy_health(self):
         """Analyze overall economy health metrics"""
-        with Timer("Analyzing economy health"):
+        with Timer("Analyzing economy health metrics"):
             df = self.data['transactions']
             daily_summary = self.data['daily_summary']
             
-            # Create visualization directory
-            ensure_directory(self.output_dir)
-            
-            # Calculate daily metrics if not available
+            # Generate daily summary if not available
             if daily_summary.empty and not df.empty:
                 logger.info("Calculating daily summary from transaction data")
                 daily_summary = df.groupby('date').agg({
                     'timestamp': 'count',
                     'cash_with_sign': 'sum',
                     'user': 'nunique'
-                }).rename(columns={'timestamp': 'transaction_count', 'user': 'active_users'})
+                }).rename(columns={
+                    'timestamp': 'transaction_count', 
+                    'cash_with_sign': 'cash_flow',
+                    'user': 'active_users'
+                })
                 daily_summary = daily_summary.reset_index()
             
             # Calculate economy health metrics
             if not daily_summary.empty:
                 daily_metrics = daily_summary.copy()
-                daily_metrics['cumulative_cash'] = daily_metrics['cash_with_sign'].cumsum()
+                daily_metrics['cumulative_cash'] = daily_metrics['cash_flow'].cumsum()
                 
                 # Calculate running metrics
-                daily_metrics['avg_per_transaction'] = daily_metrics['cash_with_sign'] / daily_metrics['transaction_count']
+                daily_metrics['avg_per_transaction'] = daily_metrics['cash_flow'] / daily_metrics['transaction_count']
                 
-                # Plot metrics
-                fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+                # Plot economy health metrics
+                fig, axes = plt.subplots(2, 2, figsize=(16, 14))
                 
-                # Plot 1: Cumulative Net Change
+                # Plot 1: Cash Flow
                 axes[0, 0].plot(daily_metrics['date'], daily_metrics['cumulative_cash'], 
-                              marker='o', linestyle='-', color='green', linewidth=2)
+                            marker='o', linestyle='-', color='#4CAF50', linewidth=2)
                 axes[0, 0].set_title('Cumulative Net Change in Economy', fontsize=14)
                 axes[0, 0].set_xlabel('Date', fontsize=12)
                 axes[0, 0].set_ylabel('Cumulative Change', fontsize=12)
                 axes[0, 0].grid(True, alpha=0.3)
+                format_date_axis(axes[0, 0], daily_metrics['date'])
                 
-                # Plot 2: Daily Transaction Volume
+                # Plot 2: Transaction Volume
                 axes[0, 1].plot(daily_metrics['date'], daily_metrics['transaction_count'], 
-                              marker='o', linestyle='-', color='blue', linewidth=2)
+                            marker='o', linestyle='-', color='#2196F3', linewidth=2)
                 axes[0, 1].set_title('Daily Transaction Count', fontsize=14)
                 axes[0, 1].set_xlabel('Date', fontsize=12)
                 axes[0, 1].set_ylabel('Number of Transactions', fontsize=12)
                 axes[0, 1].grid(True, alpha=0.3)
+                format_date_axis(axes[0, 1], daily_metrics['date'])
                 
-                # Plot 3: Daily Cash Flow
-                axes[1, 0].plot(daily_metrics['date'], daily_metrics['cash_with_sign'], 
-                              marker='o', linestyle='-', color='purple', linewidth=2)
-                axes[1, 0].set_title('Daily Net Cash Flow', fontsize=14)
-                axes[1, 0].set_xlabel('Date', fontsize=12)
-                axes[1, 0].set_ylabel('Net Cash Flow', fontsize=12)
-                axes[1, 0].grid(True, alpha=0.3)
+                # Plot 3: Gini Coefficient
+                if 'gini_coefficient' in daily_metrics.columns:
+                    axes[1, 0].plot(daily_metrics['date'], daily_metrics['gini_coefficient'], 
+                                marker='o', linestyle='-', color='#FF5722', linewidth=2)
+                    axes[1, 0].set_title('Wealth Inequality (Gini Coefficient)', fontsize=14)
+                    axes[1, 0].set_xlabel('Date', fontsize=12)
+                    axes[1, 0].set_ylabel('Gini Coefficient', fontsize=12)
+                    axes[1, 0].grid(True, alpha=0.3)
+                    format_date_axis(axes[1, 0], daily_metrics['date'])
                 
                 # Plot 4: Active Users
                 axes[1, 1].plot(daily_metrics['date'], daily_metrics['active_users'], 
-                              marker='o', linestyle='-', color='orange', linewidth=2)
+                            marker='o', linestyle='-', color='orange', linewidth=2)
                 axes[1, 1].set_title('Daily Active Users', fontsize=14)
                 axes[1, 1].set_xlabel('Date', fontsize=12)
                 axes[1, 1].set_ylabel('Unique Active Users', fontsize=12)
                 axes[1, 1].grid(True, alpha=0.3)
+                format_date_axis(axes[1, 1], daily_metrics['date'])
                 
                 plt.tight_layout()
                 plt.savefig(os.path.join(self.output_dir, 'economy_health_metrics.png'), dpi=300)
@@ -782,7 +788,7 @@ class EconomyAnalyzer:
             
             self.analysis_results['player_retention'] = results
             return results
-    
+            
     def generate_html_report(self):
         """Generate a comprehensive HTML report"""
         with Timer("Generating HTML report"):
@@ -841,9 +847,9 @@ class EconomyAnalyzer:
                         margin: 20px 0;
                     }
                     .metric-card {
-                        background-color: #f8f9fa;
+                        background-color: #f8f9fa; 
                         border-radius: 5px;
-                        padding: 15px;
+                        padding: 15px; 
                         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                     }
                     .metric-title {
@@ -870,13 +876,13 @@ class EconomyAnalyzer:
                         border-radius: 5px;
                     }
                     .image-pair {
-                        display: grid;
+                        display: grid; 
                         grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
                         gap: 20px;
                         margin: 20px 0;
                     }
                     table {
-                        width: 100%;
+                        width: 100%; 
                         border-collapse: collapse;
                         margin: 20px 0;
                     }
@@ -893,8 +899,8 @@ class EconomyAnalyzer:
                         background-color: #f5f5f5;
                     }
                     .insights {
-                        background-color: #e8f4f8;
-                        border-left: 4px solid #3498db;
+                        background-color: #e8f4f8; 
+                        border-left: 4px solid #3498db; 
                         padding: 15px;
                         margin: 20px 0;
                         border-radius: 0 5px 5px 0;
@@ -973,7 +979,7 @@ class EconomyAnalyzer:
                                 <div class="metric-description">Players active in the last 7 days</div>
                             </div>
                         </div>
-
+                        
                         {developer_insights}
 
                         <h3>Economy Health Metrics</h3>
@@ -982,7 +988,7 @@ class EconomyAnalyzer:
                             <img src="wealth_distribution.png" alt="Wealth Distribution">
                         </div>
                     </div>
-
+                    
                     <div class="section">
                         <h2>User Activity Analysis</h2>
                         <div class="image-pair">
@@ -1004,7 +1010,7 @@ class EconomyAnalyzer:
                             <img src="cash_flow_by_category.png" alt="Cash Flow by Category">
                         </div>
                     </div>
-
+                    
                     <div class="section">
                         <h2>Player Progression Analysis</h2>
                         <div class="image-pair">

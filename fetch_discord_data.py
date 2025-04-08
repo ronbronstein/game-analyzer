@@ -9,6 +9,7 @@ import sys
 import argparse
 import subprocess
 import time
+import json
 from datetime import datetime
 import shutil
 from dotenv import load_dotenv
@@ -16,9 +17,11 @@ from dotenv import load_dotenv
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Import utility functions
+# Import utility functions and database
 try:
     from gameanalytics.utils import logger, ensure_directory
+    from gameanalytics.database import store_messages, update_extraction_status, init_database
+    from gameanalytics.errors import DataExtractionError, handle_error
 except ImportError:
     import logging
     logging.basicConfig(level=logging.INFO)
@@ -48,6 +51,7 @@ def load_env_config():
     
     return config
 
+@handle_error
 def backup_existing_file(file_path, max_backups=5):
     """Create a backup of an existing file with timestamp"""
     if not os.path.exists(file_path):
@@ -62,74 +66,176 @@ def backup_existing_file(file_path, max_backups=5):
     shutil.copy2(file_path, backup_path)
     
     # Clean up old backups if we exceed max_backups
-    backup_files = [f for f in os.listdir(os.path.dirname(file_path)) 
-                    if f.startswith(os.path.basename(file_path) + '.backup_')]
+    dir_path = os.path.dirname(file_path)
+    # Use current directory if dirname returns empty string
+    dir_path = dir_path if dir_path else '.'
+    
+    base_filename = os.path.basename(file_path)
+    backup_files = [f for f in os.listdir(dir_path) 
+                    if f.startswith(base_filename + '.backup_')]
     backup_files.sort(reverse=True)  # Newest first
     
     # Remove excess backups
     if len(backup_files) > max_backups:
         for old_backup in backup_files[max_backups:]:
-            old_path = os.path.join(os.path.dirname(file_path), old_backup)
+            old_path = os.path.join(dir_path, old_backup)
             logger.info(f"Removing old backup: {old_backup}")
             os.remove(old_path)
     
     return backup_path
 
+@handle_error
 def fetch_discord_data(bot_token, channel_id, output_file="export.json", use_docker=True):
-    """Fetch Discord channel data using Discord Chat Exporter"""
+    """Fetch Discord channel data using DiscordChatExporter"""
     if not bot_token:
         logger.error("Bot token is required. Set DISCORD_BOT_TOKEN in .env file or use --token argument.")
-        return False
+        raise DataExtractionError("Bot token is required")
     
     logger.info(f"Fetching Discord data for channel ID: {channel_id}")
     
     try:
+        # Initialize database if not already initialized
+        init_database()
+        
+        # Use a temporary output file when fetching data to avoid locks
+        temp_output = f"{output_file}.temp"
+        
+        # Update extraction status to in_progress
+        status_id = update_extraction_status({
+            'status': 'in_progress',
+            'start_time': datetime.now().isoformat()
+        })
+        
         if use_docker:
-            # Use Docker container
-            cmd = [
-                "docker", "run", "--rm",
-                "-v", f"{os.getcwd()}:/out",
-                "tyrrrz/discordchatexporter", "export",
-                "-t", bot_token,
-                "-c", channel_id,
-                "-f", "Json",
-                "--bot",
-                "-o", f"/out/{output_file}"
-            ]
+            # Use Docker to run DiscordChatExporter
+            absolute_path = os.path.abspath(os.path.dirname(output_file))
+            filename = os.path.basename(temp_output)
+            command = f"docker run --rm -v {absolute_path}:/out tyrrrz/discordchatexporter export -t {bot_token} -c {channel_id} -f Json -o /out/{filename}"
+            logger.info(f"Fetching Discord data for channel ID: {channel_id}")
+            logger.info(f"Running command: {command.replace(bot_token, '***TOKEN***')}")
+            
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                shell=True,
+                text=True
+            )
+            
+            for line in process.stdout:
+                logger.info(f"Task output: {line.strip()}")
+                
+            return_code = process.wait()
+            
+            if return_code != 0:
+                logger.error(f"Task failed with return code {return_code}")
+                update_extraction_status({
+                    'id': status_id,
+                    'status': 'failed',
+                    'end_time': datetime.now().isoformat()
+                })
+                raise DataExtractionError(f"Discord data export failed with code {return_code}")
+                
+            # If successful, move temp file to final destination
+            if os.path.exists(temp_output):
+                # Make sure final destination is not being accessed
+                try:
+                    if os.path.exists(output_file):
+                        os.remove(output_file)
+                except:
+                    logger.warning(f"Could not remove existing {output_file}, it may be in use")
+                    update_extraction_status({
+                        'id': status_id,
+                        'status': 'failed',
+                        'end_time': datetime.now().isoformat()
+                    })
+                    raise DataExtractionError("Could not update output file, it may be in use")
+                    
+                try:
+                    os.rename(temp_output, output_file)
+                except:
+                    logger.warning(f"Could not rename {temp_output} to {output_file}")
+                    update_extraction_status({
+                        'id': status_id,
+                        'status': 'failed',
+                        'end_time': datetime.now().isoformat()
+                    })
+                    raise DataExtractionError("Could not finalize output file")
+                
+                # Process the data and store in database
+                process_and_store_data(output_file, status_id)
+                
+                return True
         else:
-            # If not using Docker, assume DiscordChatExporter is installed locally
-            cmd = [
-                "DiscordChatExporter.Cli", "export",
-                "--token", bot_token,
-                "--channel", channel_id,
-                "--format", "Json",
-                "--bot",
-                "--output", output_file
-            ]
+            # For future implementation: use local DiscordChatExporter.CLI installation
+            logger.error("Local DiscordChatExporter not implemented. Please use Docker.")
+            update_extraction_status({
+                'id': status_id,
+                'status': 'failed',
+                'end_time': datetime.now().isoformat(),
+                'error': "Local DiscordChatExporter not implemented"
+            })
+            raise DataExtractionError("Local DiscordChatExporter not implemented")
+    except Exception as e:
+        logger.error(f"Error fetching Discord data: {str(e)}")
+        update_extraction_status({
+            'status': 'failed',
+            'end_time': datetime.now().isoformat(),
+            'error': str(e)
+        })
+        raise DataExtractionError(f"Error fetching Discord data: {str(e)}", original_exception=e)
+
+@handle_error
+def process_and_store_data(json_file, status_id):
+    """Process JSON data and store in database"""
+    logger.info(f"Processing and storing Discord data from {json_file}")
+    
+    try:
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
         
-        logger.info(f"Running command: {' '.join(cmd).replace(bot_token, '***TOKEN***')}")
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate()
+        messages = []
+        for msg in data.get('messages', []):
+            message = {
+                'message_id': msg.get('id'),
+                'channel_id': data.get('channel', {}).get('id'),
+                'timestamp': msg.get('timestamp'),
+                'author_id': msg.get('author', {}).get('id'),
+                'content': msg.get('content'),
+                'message_type': 'message',
+                'raw_data': msg
+            }
+            messages.append(message)
         
-        if process.returncode != 0:
-            logger.error(f"Error fetching Discord data: {stderr.decode('utf-8')}")
-            return False
+        # Store in database
+        count = store_messages(messages)
         
-        logger.info("Discord data fetched successfully!")
-        logger.info(f"Output file: {output_file}")
+        # Update extraction status
+        update_extraction_status({
+            'id': status_id,
+            'status': 'completed',
+            'end_time': datetime.now().isoformat(),
+            'total_messages': count,
+            'last_processed_message_id': messages[-1]['message_id'] if messages else None,
+            'last_processed_timestamp': messages[-1]['timestamp'] if messages else None
+        })
         
-        # Verify file exists and has content
-        if not os.path.exists(output_file):
-            logger.error(f"Output file {output_file} not found!")
-            return False
+        logger.info(f"Successfully processed and stored {count} messages")
         
-        file_size = os.path.getsize(output_file)
-        logger.info(f"Output file size: {file_size / (1024*1024):.2f} MB")
+        # Also create the traditional CSV output for backward compatibility
+        ensure_directory('balance_data')
         
+        logger.info("Data processing and storage completed successfully")
         return True
     except Exception as e:
-        logger.error(f"Error fetching Discord data: {e}")
-        return False
+        logger.error(f"Error processing and storing data: {str(e)}")
+        update_extraction_status({
+            'id': status_id,
+            'status': 'failed',
+            'end_time': datetime.now().isoformat(),
+            'error': f"Error processing data: {str(e)}"
+        })
+        raise DataExtractionError(f"Error processing Discord data: {str(e)}", original_exception=e)
 
 def main():
     """Main entry point"""
@@ -150,19 +256,23 @@ def main():
     channel_id = args.channel or config['channel_id']
     output_file = args.output
     
-    # Backup existing file if it exists and backup is not disabled
-    if os.path.exists(output_file) and config['backup_exports'] and not args.no_backup:
-        backup_existing_file(output_file, config['max_backup_files'])
-    
-    # Fetch Discord data
-    success = fetch_discord_data(
-        bot_token, 
-        channel_id, 
-        output_file, 
-        use_docker=not args.no_docker
-    )
-    
-    return 0 if success else 1
+    try:
+        # Backup existing file if it exists and backup is not disabled
+        if os.path.exists(output_file) and config['backup_exports'] and not args.no_backup:
+            backup_existing_file(output_file, config['max_backup_files'])
+        
+        # Fetch Discord data
+        success = fetch_discord_data(
+            bot_token, 
+            channel_id, 
+            output_file, 
+            use_docker=not args.no_docker
+        )
+        
+        return 0 if success else 1
+    except Exception as e:
+        logger.error(f"Error in main function: {str(e)}")
+        return 1
 
 if __name__ == "__main__":
     sys.exit(main()) 

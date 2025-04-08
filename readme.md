@@ -1,134 +1,83 @@
-# Discord Economy Game Analysis Tool
+# Discord Economy Game Data Analyzer
 
-An advanced data analysis toolkit for UnbelievaBoat's Discord economy game, providing comprehensive insights into player behavior, economy health, and gambling mechanics.
+A comprehensive tool for analyzing economy data from Discord games, especially those using UnbelievaBoat.
 
 ## Features
 
-- **Comprehensive Analysis**: Extract and analyze Discord game economy data from UnbelievaBoat
-- **Economy Health Tracking**: Monitor inflation, wealth distribution, and transaction patterns
-- **Gambling Analysis**: Evaluate win rates, expected values, and fairness metrics for gambling games
-- **Transaction Categorization**: Automatically categorize transactions with improved accuracy
-- **Statistical Analysis**: Perform statistical tests on game mechanics and player behavior
-- **Data Visualization**: Generate rich visualizations for all aspects of the economy
-- **HTML Reports**: Create browser-viewable reports with detailed insights and recommendations
+- **Data Extraction**: Extract economy transactions from Discord export files
+- **Economy Analysis**: Analyze wealth distribution, Gini coefficient, and economy health
+- **Gambling Analysis**: Track gambling statistics and ROI for different games
+- **Category Analysis**: Analyze transaction patterns by category
+- **Web Interface**: Clean, modern UI for running analysis and viewing results
+- **Discord Integration**: Direct fetching of Discord data through bot API
+- **Advanced Features** (in `advanced-features` branch):
+  - Time Series Analysis: Detect trends and patterns in economic activity
+  - Player Network Analysis: Visualize and analyze player interactions
+  - LLM-Based Summary: Generate executive summaries with key insights
 
-## Installation
+## Getting Started
 
-1. Clone the repository:
+See [SETUP.md](SETUP.md) for detailed installation and usage instructions.
+
+## Quick Start
+
 ```bash
-git clone https://github.com/yourusername/analyze-game-data.git
-cd analyze-game-data
-```
+# Run the web interface
+python app.py
 
-2. Install dependencies:
-```bash
-pip install pandas matplotlib seaborn statsmodels networkx
-```
+# Direct Discord data fetching
+python fetch_discord_data.py --token YOUR_BOT_TOKEN
 
-3. Optional dependencies for enhanced features:
-```bash
-pip install plotly
-```
-
-## Usage
-
-### Basic Analysis
-
-Run the complete analysis pipeline on a Discord export file:
-```bash
+# Basic analysis (command line)
 python run_analysis.py path/to/export.json
+
+# Use the simple shell script
+./run_analysis.sh --file export.json
+
+# Advanced analysis (after switching to advanced-features branch)
+python run_complete_analysis.py path/to/export.json
 ```
 
-### Advanced Options
+## Web Interface
 
-Skip data extraction if you've already processed the data:
+The tool includes a modern web interface that allows you to:
+
+- Fetch Discord data directly using your bot token
+- Run different types of analysis with a single click
+- View analysis results with larger, interactive visualizations
+- Access full HTML reports
+- Customize the interface with light/dark themes
+
+To start the web interface:
+
 ```bash
-python run_analysis.py --skip-extraction
+python app.py
 ```
 
-Run specific analysis components:
-```bash
-python run_analysis.py --economy-only
-python run_analysis.py --gambling-only
-python run_analysis.py --category-only
-python run_analysis.py --advanced-only
-```
+Then open your browser to http://localhost:5000
 
-### Output
+## Requirements
 
-Results are saved to the following directories:
-- `balance_data/`: Extracted transaction data
-- `economy_analysis/`: Economy health metrics and visualizations
-- `gambling_analysis/`: Gambling activity analysis
-- `category_analysis/`: Transaction category analysis
-- `advanced_analysis/`: Advanced metrics and network analysis
+- Python 3.8+
+- Required packages in requirements.txt
+- Docker (optional, for Discord data fetching)
 
-HTML reports are automatically opened in your default browser.
+## Game Developer Perspective
 
-## Project Structure
+This tool is designed with game developers in mind, providing:
 
-```
-analyze-game-data/
-├── gameanalytics/             # Main package
-│   ├── extractors/            # Data extraction modules
-│   ├── processors/            # Data processing modules
-│   ├── analyzers/             # Analysis modules
-│   │   ├── economy/           # Economy analysis
-│   │   ├── gambling/          # Gambling analysis
-│   │   └── category/          # Category analysis
-│   ├── visualizers/           # Visualization modules
-│   ├── config.py              # Configuration settings
-│   └── utils.py               # Shared utility functions
-├── run_analysis.py            # Main execution script
-├── archive/                   # Archive of old scripts
-├── IMPROVEMENTS.md            # Documentation of improvements
-└── REORGANIZATION_SUMMARY.md  # Summary of code reorganization
-```
-
-## Key Metrics
-
-The tool analyzes and generates the following key metrics:
-
-- **Economy Health**
-  - Total currency in circulation
-  - Inflation/deflation rates
-  - Gini coefficient for wealth inequality
-  - Top earners and spenders
-
-- **Gambling Analysis**
-  - House edge for each game type
-  - Win probabilities and payout ratios
-  - Expected values for each game
-  - Statistical fairness tests
-
-- **Transaction Patterns**
-  - Daily/weekly activity cycles
-  - Popular transaction categories
-  - User interaction networks
-  - User behavior patterns
-
-## Documentation
-
-For more detailed information:
-- `IMPROVEMENTS.md`: Details on improvements made to the codebase
-- `REORGANIZATION_SUMMARY.md`: Overview of the code reorganization
-
-## Troubleshooting
-
-**Export file too large**  
-If the Discord export.json is too large, try splitting it into smaller time periods or run with `--skip-extraction` if you've already extracted the data.
-
-**Missing dependencies**  
-Run `pip install -r requirements.txt` to ensure all dependencies are installed.
-
-**Report display issues**  
-Make sure you have a modern web browser installed. Reports use modern HTML/CSS features.
+- Economy health metrics to balance your game
+- Player behavior insights to improve engagement
+- Gambling analysis to ensure fair mechanics
+- Transaction pattern analysis to identify potential exploits
 
 ## License
 
-This project is available under the MIT License.
+MIT
 
 ## Acknowledgements
 
-- UnbelievaBoat Discord bot creators for their excellent economy game
-- The pandas, matplotlib, and seaborn teams for their data analysis tools
+- Thanks to the Discord UnbelievaBoat economy bot
+- Visualization libraries: Matplotlib, Seaborn
+- Advanced analysis: NetworkX, StatsModels
+- Discord Chat Exporter by Tyrrrz

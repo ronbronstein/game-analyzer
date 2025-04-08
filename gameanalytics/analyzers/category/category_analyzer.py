@@ -161,22 +161,14 @@ class CategoryAnalyzer:
     def apply_improved_categories(self):
         """Apply improved categorization to the data"""
         with Timer("Applying improved categorization"):
-            # Copy original categories
-            self.df['original_category'] = self.df['category']
-            
             # Apply new categorization
-            self.df['improved_category'] = self.df['reason'].apply(self.improved_categorize_transaction)
+            self.df['category'] = self.df['reason'].apply(self.improved_categorize_transaction)
             
-            # Calculate how many transactions were recategorized
-            recategorized = self.df[self.df['original_category'] != self.df['improved_category']]
+            # Calculate category distribution
+            category_counts = self.df['category'].value_counts()
             
-            logger.info(f"Improved categorization recategorized {len(recategorized)} transactions ({len(recategorized)/len(self.df)*100:.1f}% of total)")
-            
-            # Count by new categories
-            new_category_counts = self.df['improved_category'].value_counts()
-            
-            logger.info(f"Improved category distribution:")
-            for category, count in new_category_counts.head(10).items():
+            logger.info(f"Category distribution:")
+            for category, count in category_counts.head(10).items():
                 logger.info(f"  {category}: {count} transactions")
             
             return self.df
@@ -185,7 +177,7 @@ class CategoryAnalyzer:
         """Analyze the ratio of wins to losses for gambling activities"""
         with Timer("Analyzing gambling win/loss ratios"):
             # Identify gambling categories
-            gambling_cats = [cat for cat in self.df['improved_category'].unique() 
+            gambling_cats = [cat for cat in self.df['category'].unique() 
                             if any(term in cat.lower() for term in ['bet', 'win', 'gambling', 'slots', 'blackjack', 'roulette', 'animal race'])]
             
             if not gambling_cats:
@@ -193,11 +185,11 @@ class CategoryAnalyzer:
                 return None
             
             # Filter for gambling transactions
-            gambling_df = self.df[self.df['improved_category'].isin(gambling_cats)].copy()
+            gambling_df = self.df[self.df['category'].isin(gambling_cats)].copy()
             
             # Separate wins and bets
-            wins = gambling_df[gambling_df['improved_category'].str.contains('Win')]
-            bets = gambling_df[gambling_df['improved_category'].str.contains('Bet')]
+            wins = gambling_df[gambling_df['category'].str.contains('Win')]
+            bets = gambling_df[gambling_df['category'].str.contains('Bet')]
             
             # Analyze by game type
             game_types = ['Blackjack', 'Roulette', 'Animal Race']
@@ -205,8 +197,8 @@ class CategoryAnalyzer:
             results = []
             
             for game in game_types:
-                game_wins = wins[wins['improved_category'].str.contains(game)]
-                game_bets = bets[bets['improved_category'].str.contains(game)]
+                game_wins = wins[wins['category'].str.contains(game)]
+                game_bets = bets[bets['category'].str.contains(game)]
                 
                 total_win_amount = game_wins['cash_with_sign'].sum()
                 total_bet_amount = abs(game_bets['cash_with_sign'].sum())
@@ -251,23 +243,23 @@ class CategoryAnalyzer:
             # Create output directory
             ensure_directory(self.output_dir)
             
-            # 1. Plot original vs improved category distribution
+            # 1. Plot category distribution
             fig, axes = plt.subplots(1, 2, figsize=(18, 12))
             
-            # Original categories
-            original_counts = self.df['original_category'].value_counts()
-            sns.barplot(x=original_counts.values, y=original_counts.index, ax=axes[0])
-            axes[0].set_title('Original Categories', fontsize=14)
+            # Category counts
+            category_counts = self.df['category'].value_counts()
+            sns.barplot(x=category_counts.values, y=category_counts.index, ax=axes[0])
+            axes[0].set_title('Category Distribution', fontsize=14)
             axes[0].set_xlabel('Transaction Count', fontsize=12)
             
-            # Improved categories (top 15 for readability)
-            improved_counts = self.df['improved_category'].value_counts().head(15)
-            sns.barplot(x=improved_counts.values, y=improved_counts.index, ax=axes[1])
-            axes[1].set_title('Improved Categories (Top 15)', fontsize=14)
+            # Top categories
+            top_categories = category_counts.head(15)
+            sns.barplot(x=top_categories.values, y=top_categories.index, ax=axes[1])
+            axes[1].set_title('Top 15 Categories', fontsize=14)
             axes[1].set_xlabel('Transaction Count', fontsize=12)
             
             plt.tight_layout()
-            plt.savefig(os.path.join(self.output_dir, 'category_comparison.png'), dpi=300)
+            plt.savefig(os.path.join(self.output_dir, 'category_distribution.png'), dpi=300)
             plt.close()
             
             # 2. Plot 'Other' category reasons
@@ -334,12 +326,11 @@ class CategoryAnalyzer:
     def generate_html_report(self):
         """Generate an HTML report with the analysis results"""
         with Timer("Generating category HTML report"):
-            # Count transactions by improved category
-            improved_counts = self.df['improved_category'].value_counts()
-            original_counts = self.df['original_category'].value_counts()
+            # Count transactions by category
+            category_counts = self.df['category'].value_counts()
             
             # Calculate transaction volume by category
-            volume_by_category = self.df.groupby('improved_category')['cash_amount'].sum().sort_values(ascending=False)
+            volume_by_category = self.df.groupby('category')['cash_amount'].sum().sort_values(ascending=False)
             
             # Create HTML content
             html_content = f"""
@@ -401,10 +392,10 @@ class CategoryAnalyzer:
                     with special focus on the "Other" category and gambling outcomes.</p>
                 </div>
                 
-                <h2>Category Comparison</h2>
+                <h2>Category Distribution</h2>
                 <div class="gallery">
                     <div>
-                        <img src="category_comparison.png" class="chart" alt="Category Comparison">
+                        <img src="category_distribution.png" class="chart" alt="Category Distribution">
                     </div>
                 </div>
                 
@@ -413,21 +404,14 @@ class CategoryAnalyzer:
                     <tr>
                         <th>Category</th>
                         <th>Count</th>
-                        <th>Original Category</th>
-                        <th>Change</th>
                     </tr>
             """
             
-            for category, count in improved_counts.head(20).items():
-                original = original_counts.get(category, 0)
-                change = count - original
-                
+            for category, count in category_counts.head(20).items():
                 html_content += f"""
                     <tr>
                         <td>{category}</td>
                         <td>{count}</td>
-                        <td>{original}</td>
-                        <td class="{'good' if change > 0 else 'bad' if change < 0 else ''}">{change:+d}</td>
                     </tr>
                 """
             
@@ -566,13 +550,10 @@ class CategoryAnalyzer:
             """
             
             # Calculate percentage of Other category
-            other_pct = (original_counts.get('Other', 0) / len(self.df)) * 100
-            improved_other_pct = (improved_counts.get('Other', 0) / len(self.df)) * 100
+            other_pct = (category_counts.get('Other', 0) / len(self.df)) * 100
             
             html_content += f"""
-                        <li>Original categorization had {original_counts.get('Other', 0)} transactions ({other_pct:.1f}%) in the "Other" category</li>
-                        <li>Improved categorization has {improved_counts.get('Other', 0)} transactions ({improved_other_pct:.1f}%) in the "Other" category</li>
-                        <li>Reduction of {(other_pct - improved_other_pct):.1f} percentage points</li>
+                        <li>Original categorization had {category_counts.get('Other', 0)} transactions ({other_pct:.1f}%) in the "Other" category</li>
             """
             
             # Add gambling insights if available
